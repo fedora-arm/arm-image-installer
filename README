@@ -23,10 +23,13 @@ Usage: arm-image-installer <options>
 	--addkey=       - /path/to/ssh-public-key
 	--image=IMAGE	- xz compressed image file name
 	--media=DEVICE	- media device file (/dev/[sdX|mmcblkX])
+	--selinux=OFF	- Disable SELinux
 	--norootpass	- Remove the root password
 	--resizefs	- Resize root filesystem to fill media device
 	--supported	- List of supported hardware
 	--target=TARGET	- target board
+	--relabel       - SELinux relabel root filesystem
+	--args		- kernel commandline addition
 	--version	- Display version and exit
 	-y		- Assumes yes, will not wait for confirmation
 
