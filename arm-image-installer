@@ -18,6 +18,8 @@ Usage: $(basename ${0}) <options>
 	--media=DEVICE	- media device file (/dev/[sdX|mmcblkX])
 	--norootpass	- Remove the root password
 	--resizefs	- Resize root filesystem to fill media device
+	--selinux=off	- Set SELinux off
+	--selinux=on	- Set SELinux on
 	--supported	- List of supported hardware
 	--target=TARGET	- target board
 	--relabel       - SELinux relabel root filesystem
@@ -90,6 +92,14 @@ while [ $# -gt 0 ]; do
 			else
 				SELINUX=$2
 				shift
+			fi
+			if [ "$(echo ${SELINUX} | tr [:lower:] [:upper:])" = "OFF" ]; then
+				SELINUX=off
+			elif [ "$(echo ${SELINUX} | tr [:lower:] [:upper:])" = "ON" ]; then
+				SELINUX=on
+			else
+				echo "Error: Unknown --selinux parameter: $SELINUX"
+				exit 1
 			fi
 			;;
 		--args*)
@@ -194,6 +204,11 @@ fi
 # device exists
 if [ ! -e "$MEDIA" ]; then
 	echo "Error: $MEDIA not found! Please choose an existing device."
+	exit 1
+fi
+
+if [ "$RELABEL" = "" -a "$NOROOTPASS" != "" -a "$SELINUX" != "off" -a "$(getenforce 2>&1)" != "Enforcing" -a "$(getenforce 2>&1)" != "Permissive" ]; then
+	echo "Error: SELinux is disabled on host and --norootpass is specified: Either --selinux=off or --relabel is required."
 	exit 1
 fi
 
@@ -446,15 +461,14 @@ else
 fi
 
 # turn off selinux
-if [ "$SELINUX" != "" ]; then
-	if [ "$(echo ${SELINUX} | tr [:lower:] [:upper:])" = "OFF" ]; then
-		echo "= Turning SELinux off ..."
-		sed -i 's/SELINUX=enforcing/SELINUX=permissive/' /tmp/root/etc/selinux/config
-		# turn on selinux
-	elif [ "$(echo ${SELINUX} | tr [:lower:] [:upper:])" = "ON" ]; then
-		echo "= Turning SELinux on ..."
-		sed -i 's/SELINUX=permissive/SELINUX=enforcing/' /tmp/root/etc/selinux/config
-	fi
+if [ "$SELINUX" = "off" ]; then
+	echo "= Turning SELinux off ..."
+	# SELINUX=permissive does not permit login with --norootpass and SELinux disabled on host.
+	sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /tmp/root/etc/selinux/config
+# turn on selinux
+elif [ "$SELINUX" = "on" ]; then
+	echo "= Turning SELinux on ..."
+	sed -i 's/SELINUX=permissive/SELINUX=enforcing/' /tmp/root/etc/selinux/config
 fi
 # Remove root password
 if [ "$NOROOTPASS" = "1" ]; then
