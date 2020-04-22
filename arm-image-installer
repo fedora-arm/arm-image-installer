@@ -537,6 +537,11 @@ if [ "$FIX_RPI" != "" ]; then
 	sed -i 's/append/& rd.driver.blacklist=vc4/' /tmp/boot/extlinux/extlinux.conf
 fi
 
+if [ "$TARGET" = "rpi4" ]; then
+	sed -i 's|cma=256MB||g' /tmp/fw/EFI/fedora/grub.cfg
+	sed -i 's|cma=256MB||g' /tmp/fw/EFI/fedora/grubenv
+fi
+
 # check if host system has selinux disabled, if it does autorelabel is required
 if [ "$(getenforce)" = "Disabled" ]; then
                 echo "= NOTE: System Relabel required on first boot."
