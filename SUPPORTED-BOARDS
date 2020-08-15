@@ -31,5 +31,8 @@ clearfog helios4
 ST Devices:
 stih410-b2260 
 
+Rockchips-ARMv8 Devices:
+pinebook-pro-rk3399
+
 Other Devices:
 arndale chiliboard cl-som-am57x rpi2 rpi3 rpi4 olpc_xo175
