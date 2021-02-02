@@ -25,7 +25,7 @@ Optional
 	--addconsole    - Add system console kernel parameter for the target
 	--addkey        - /path/to/ssh-public-key
 	--args          - Optional kernel parameters listed in quotes
-	--norootpass	- Remove the root password
+	--norootpass	- Set the root password to the empty string
 	--relabel       - SELinux relabel root filesystem on first boot
 	--resizefs      - Resize root filesystem to fill media device
 	--sysrq		- Enable System Request debugging of the kernel

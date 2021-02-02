@@ -18,7 +18,7 @@ Optional
 	--addconsole    - Add system console kernel parameter for the target
 	--addkey        - /path/to/ssh-public-key
 	--args          - Optional kernel parameters listed in quotes
-	--norootpass    - Remove the root password
+	--norootpass    - Set the root password to the empty string
 	--relabel       - SELinux relabel root filesystem on first boot
 	--resizefs      - Resize root filesystem to fill media device
 	--sysrq         - Enable System Request debugging of the kernel
@@ -260,9 +260,9 @@ fi
 if [ "$RELABEL" != "" ]; then
 	echo "= SELinux relabel will be completed on first boot."
 fi
-# Remove root password
+# Empty the root password
 if [ "$NOROOTPASS" != "" ]; then
-	echo "= Root Password will be removed."
+	echo "= Root Password will be set to the empty string."
 fi
 # Enable System Request debugging of the kernel
 if [ "$SYSRQ" != "" ]; then
@@ -527,9 +527,9 @@ if [ "$SELINUX" != "" ]; then
 		sed -i 's/SELINUX=permissive/SELINUX=enforcing/' ${PREFIX}/etc/selinux/config
 	fi
 fi
-# Remove root password
+# Empty the root password
 if [ "$NOROOTPASS" = "1" ]; then
-	echo "= Removing the root password."
+	echo "= Setting the root password to the empty string."
 	sed -i 's/root:x:/root::/' ${PREFIX}/etc/passwd
 fi
 # Enable System Request debugging of the kernel
