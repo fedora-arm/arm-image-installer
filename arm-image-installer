@@ -334,7 +334,7 @@ add_kernel_parameter () {
 		sed -i "s|append|& $1 |" /tmp/boot/extlinux/extlinux.conf
 	elif [ -f /tmp/fw/EFI/fedora/grub.cfg ]; then
 		sed -i "s|GRUB_CMDLINE_LINUX=\"|& $1 |" ${PREFIX}/etc/default/grub
-		if grep -q '^kernelopts=' /tmp/fw/EFI/fedora/grubenv; then
+		if [ -f /tmp/fw/EFI/fedora/grubenv ] && grep -q '^kernelopts=' /tmp/fw/EFI/fedora/grubenv; then
 			sed -i "s|kernelopts=|& $1 |" /tmp/fw/EFI/fedora/grubenv
 		else
 			add_bls_parameter "$1"
