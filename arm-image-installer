@@ -322,19 +322,22 @@ get_lvm_name () {
 	fi
 }
 
-add_bls_parameter()
-{
+add_bls_parameter() {
 	for bls in /tmp/boot/loader/entries/*.conf; do
+		echo "appending kargs '$1' to BLS config fragment /boot/loader/entries/$(basename ${bls})"
 		sed -i "s|options|& $1|" ${bls}
 	done
 }
 
-add_kernel_parameter () {
+add_kernel_parameter() {
 	if [ -f /tmp/boot/extlinux/extlinux.conf ]; then
+		echo "appending kargs to '$1' /boot/extlinux/extlinux.conf"
 		sed -i "s|append|& $1 |" /tmp/boot/extlinux/extlinux.conf
 	elif [ -f /tmp/fw/EFI/fedora/grub.cfg ]; then
+		echo "appending kargs '$1' to /etc/default/grub"
 		sed -i "s|GRUB_CMDLINE_LINUX=\"|& $1 |" ${PREFIX}/etc/default/grub
 		if [ -f /tmp/fw/EFI/fedora/grubenv ] && grep -q '^kernelopts=' /tmp/fw/EFI/fedora/grubenv; then
+			echo "appending kargs '$1' to /boot/EFI/fedora/grubenv"
 			sed -i "s|kernelopts=|& $1 |" /tmp/fw/EFI/fedora/grubenv
 		else
 			add_bls_parameter "$1"
