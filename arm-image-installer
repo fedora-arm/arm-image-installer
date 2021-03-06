@@ -511,6 +511,11 @@ if [ "$TARGET" != "" ]; then
 		. "${BOARDDIR}/${TARGET}"
 	elif [ -d "${PREFIX}/usr/share/uboot/${TARGET}" ]; then
 		. "${BOARDDIR}/${TARGET}"
+	elif [ -d "/usr/share/uboot/${TARGET}" ]; then
+		echo "Warning: Using out-of-tree devicetree image for ${TARGET}. Adding to OSTree"
+		mkdir ${PREFIX}/usr/share/uboot/${TARGET}
+		cp /usr/share/uboot/${TARGET}/{idbloader.img,u-boot.itb} ${PREFIX}/usr/share/uboot/${TARGET}
+		. "${BOARDDIR}/${TARGET}"
 	else
 		echo "= No U-Boot files found for $TARGET."
 	fi
