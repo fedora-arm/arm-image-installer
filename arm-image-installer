@@ -465,6 +465,9 @@ if [ "$RESIZEFS" != "" ]; then
 	elif [ "$FS_TYPE" = "ext4" ]; then
 		fsck.ext4 -fy "$ROOTPART"
 		resize2fs "$ROOTPART"
+	elif [ "$FS_TYPE" = "f2fs" ]; then
+		fsck.f2fs -fy "$ROOTPART"
+		resize.f2fs "$ROOTPART"
 	fi
 fi
 
