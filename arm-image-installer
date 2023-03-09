@@ -12,22 +12,23 @@ usage() {
     echo "
 Usage: $(basename ${0}) <options>
 
-	--image=IMAGE   - xz compressed image file name
-	--media=DEVICE  - media device file (/dev/[sdX|mmcblkX])
+	--image=IMAGE     - xz compressed image file name
+	--media=DEVICE    - media device file (/dev/[sdX|mmcblkX])
 Optional
-	--addconsole    - Add system console kernel parameter for the target
-	--addkey        - /path/to/ssh-public-key
-	--args          - Optional kernel parameters listed in quotes
-	--norootpass    - Remove the root password
-	--relabel       - SELinux relabel root filesystem on first boot
-	--resizefs      - Resize root filesystem to fill media device
-	--showboot	- Show boot messages, removes 'rhgb quiet' from kargs
-	--sysrq         - Enable System Request debugging of the kernel
-	--target=TARGET - target board for uboot
-	-y              - Assumes yes, will not wait for confirmation
+	--addconsole      - Add system console kernel parameter for the target
+	--addkey          - /path/to/ssh-public-key
+	--addnmconnection - Path to some /etc/NetworkManager/system-connections/example.nmconnection
+	--args            - Optional kernel parameters listed in quotes
+	--norootpass      - Remove the root password
+	--relabel         - SELinux relabel root filesystem on first boot
+	--resizefs        - Resize root filesystem to fill media device
+	--showboot	  - Show boot messages, removes 'rhgb quiet' from kargs
+	--sysrq           - Enable System Request debugging of the kernel
+	--target=TARGET   - target board for uboot
+	-y                - Assumes yes, will not wait for confirmation
 Help
-	--supported     - List of supported hardware
-	--version       - Display version and exit
+	--supported       - List of supported hardware
+	--version         - Display version and exit
 
 Example: $(basename ${0}) --image=Fedora-Rawhide.xz --target=Bananapi --media=/dev/mmcblk0
 
@@ -104,6 +105,19 @@ while [ $# -gt 0 ]; do
 				exit 1
 			fi
 			;;
+		--addnmconnection*)
+			if echo $1 | grep '=' >/dev/null ; then
+				NM_CONNECTION_FILE=$(echo $1 | sed 's/^--addnmconnection=//')
+			elif [ -n "$2" ]; then
+				NM_CONNECTION_FILE=$2
+				shift
+			else
+				echo "$(basename ${0}): Error - '--addnmconnection' expects an argument"
+				usage
+				exit 1
+			fi
+			;;
+
 		--selinux*)
 			if echo $1 | grep '=' >/dev/null ; then
 				SELINUX=$(echo $1 | sed 's/^--selinux=//')
@@ -302,6 +316,11 @@ fi
 if [ "$SSH_KEY" != "" ]; then
 	echo "= SSH Public Key $SSH_KEY will be added."
 fi
+# NM System Connection
+if [ "$NM_CONNECTION_FILE" != "" ]; then
+	echo "= NetworkManager system connection $NM_CONNECTION_FILE will be added."
+fi
+
 # Use the lpae kernel
 if [ "$LPAE" != "" ]; then
         echo "= The LPAE kernel will be the default."
@@ -516,6 +535,7 @@ fi
 
 if [ "$(echo $IMAGE | grep IoT)" != "" ]; then
 	IOT_IMAGE="1"
+	OSTREE_ROOT="/tmp/root/ostree/deploy/fedora-iot/"
 	OSTREE_ROOT_HOME="/tmp/root/ostree/deploy/fedora-iot/var/roothome"
 	OSTREE_PREFIX="/tmp/root/ostree/deploy/fedora-iot/deploy/*/"
 fi
@@ -591,7 +611,17 @@ if [ "$SSH_KEY" != "" ]; then
 		echo "= WARNING: No SSH Key Added."
 	fi
 fi
-
+# Add nm connection file to the image
+if [ "$NM_CONNECTION_FILE" != "" ]; then
+	if [ -f $NM_CONNECTION_FILE ]; then
+		echo "= Adding NetworkManager connection file."
+		# Copying in order to keep SELinux contexts et al
+		cp -v -ar --parents $NM_CONNECTION_FILE $OSTREE_ROOT
+	else
+		echo "= NetworkManager connection file $NM_CONNECTION_FILE : Not Found!"
+		echo "= WARNING: No NetworkManager connection file added."
+	fi
+fi
 # Add console
 if [ "$CONSOLE" = "1" ]; then
 	if [ "$SYSCON" = "" ]; then
