@@ -467,7 +467,7 @@ if [ "$RESIZEFS" != "" ]; then
 		if [ "$LVM_NAME" != "" ]; then
 			vgchange -a y $LVM_NAME > /dev/null 2>&1
 			pvresize "$ROOTPART"
-			lvextend -l +100%FREE /dev/$LVM_NAME/root
+			lvextend -l +100%FREE -ry /dev/$LVM_NAME/root
 			ROOTPART="/dev/$LVM_NAME/root"
 		fi
 	fi
