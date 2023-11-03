@@ -472,11 +472,7 @@ if [ "$RESIZEFS" != "" ]; then
 		fi
 	fi
 
-	if [ "$FS_TYPE" = "xfs" ]; then
-		mkdir /tmp/root > /dev/null 2>&1
-		mount "$ROOTPART" /tmp/root > /dev/null 2>&1
-		xfs_growfs /tmp/root
-	elif [ "$FS_TYPE" = "btrfs" ]; then
+	if [ "$FS_TYPE" = "btrfs" ]; then
 		mkdir /tmp/root > /dev/null 2>&1
 		mount "$ROOTPART" /tmp/root > /dev/null 2>&1
 		btrfs filesystem resize max /tmp/root
