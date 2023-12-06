@@ -548,6 +548,13 @@ else
 	PREFIX=/tmp/root
 fi
 
+# FIXME: Remove LVM file if exists from Server image (or otherwise).
+# BUG: https://bugzilla.redhat.com/bugzilla/show_bug.cgi?id=2247872
+if [ -f "${PREFIX}/etc/lvm/devices/system.devices" ]; then
+	echo "= Removing ${PREFIX}/etc/lvm/devices/system.devices ..."
+	rm "${PREFIX}/etc/lvm/devices/system.devices"
+fi
+
 # determine uboot and write to disk
 if [ "$TARGET" != "" ]; then
 	if echo "$TARGET" | grep -q 'rpi[234]' || [ "$TARGET" = "olpc_xo175" ]; then
