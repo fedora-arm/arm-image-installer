@@ -304,6 +304,7 @@ fi
 if [ "$SHOWBOOT" != "" ]; then
         echo "= Boot messages will be shown onscreen."
 fi
+echo "= Version: $VERSION"
 echo "====================================================="
 echo " "
 echo "*****************************************************"
