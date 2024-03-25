@@ -31,6 +31,24 @@ printf "\x${UUID:7:2}\x${UUID:5:2}\x${UUID:2:2}\x${UUID:0:2}" \
 mount "$FIRMPART" /tmp/fw
 cp -a /tmp/fw_bk/* /tmp/fw/
 
+REPO="copr:copr.fedorainfracloud.org:$(echo $COPR | tr / :)"
+
+if rpm --quiet -q uboot-images-armv8; then
+	from_repo="$(dnf list --installed | grep uboot-images-armv8 | awk '{ print $3}')"
+	from_repo="${from_repo:1}"
+
+	if [[ from_repo != $REPO ]]; then
+		dnf remove -y uboot-images-armv8
+		dnf --disablerepo="*" --enablerepo="$REPO" install -y uboot-images-armv8
+	fi
+else
+	dnf --disablerepo="*" --enablerepo="$REPO" install -y uboot-images-armv8
+fi
+
+cp /usr/share/uboot/am62x_${TARGET}_r5/tiboot3-am62x-gp-evm.bin /tmp/firmware/tiboot3.bin
+cp /usr/share/uboot/am62x_${TARGET}_a53/tispl.bin_unsigned /tmp/firmware/tispl.bin
+cp /usr/share/uboot/am62x_${TARGET}_a53/u-boot.img_unsigned /tmp/firmware/u-boot.img
+
 sync
 cleanup
 

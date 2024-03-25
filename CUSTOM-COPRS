@@ -4,3 +4,4 @@
 # The format for each COPR repository entry must be "board=copr", e.g:
 # beagleplay=javierm/beagleplay
 #
+beagleplay=javierm/beagleplay
