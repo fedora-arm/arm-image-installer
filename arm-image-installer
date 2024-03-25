@@ -300,6 +300,27 @@ fi
 if [ "$SSH_KEY" != "" ]; then
 	echo "= SSH Public Key $SSH_KEY will be added."
 fi
+
+declare -A COPRS=()
+
+readarray -t lines < CUSTOM-COPRS
+for line in "${lines[@]}"; do
+	[[ "$line" = "\#*" ]] && continue
+	key=${line%%=*}
+	value=${line#*=}
+	COPRS[$key]=$value
+done
+
+COPR=${COPRS[$TARGET]}
+
+# Enable custom COPR if needed for this platform
+if [ "$COPR" != "" ]; then
+	echo "= Custom COPR repository $COPR will be used."
+	mapfile -t ENABLED_COPRS < <(dnf copr list --enabled)
+	if [[ ! $(echo ${ENABLED_COPRS[@]} | grep -F -w $COPR) ]]; then
+		dnf copr enable $COPR
+	fi
+fi
 # show boot messages
 if [ "$SHOWBOOT" != "" ]; then
         echo "= Boot messages will be shown onscreen."

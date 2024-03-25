@@ -1,0 +1,6 @@
+# This file contains a list of custom COPR repositories for boards that
+# are not yet supported by the Fedora u-boot package.
+#
+# The format for each COPR repository entry must be "board=copr", e.g:
+# beagleplay=javierm/beagleplay
+#
