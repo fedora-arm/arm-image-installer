@@ -243,6 +243,12 @@ if [ ! -e "$MEDIA" ]; then
 	exit 1
 fi
 
+# user ssh key exists
+if [ "$SSH_KEY" != "" ] && ! [ -e "$SSH_KEY" ]; then
+	echo "Error: $SSH_KEY not found! Please choose an existing ssh key."
+	exit 1
+fi
+
 # Last chance to back out
 echo ""
 echo "====================================================="
