@@ -231,19 +231,19 @@ if [ "$TARGET" != "" ] && ! [ -e "${BOARDDIR}/${TARGET}" ]; then
 	exit 1
 fi
 
-# image exists
+# check image exists
 if [ ! -f "$IMAGE" ] && [ "$IMAGE" != "" ]; then
 	echo "Error: $IMAGE not found! Please choose an existing image."
 	exit 1
 fi
 
-# device exists
+# check device exists
 if [ ! -e "$MEDIA" ]; then
 	echo "Error: $MEDIA not found! Please choose an existing device."
 	exit 1
 fi
 
-# user ssh key exists
+# check user ssh key exists
 if [ "$SSH_KEY" != "" ] && ! [ -e "$SSH_KEY" ]; then
 	echo "Error: $SSH_KEY not found! Please choose an existing ssh key."
 	exit 1
