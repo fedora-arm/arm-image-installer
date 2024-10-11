@@ -1,28 +1,31 @@
 AllWinner Devices:
 a64-olinuxino a64-olinuxino-emmc amarula_a64_relic bananapi_m2_plus_h5 
- bananapi_m64 emlid_neutis_n5_devboard libretech_all_h3_cc_h5 nanopi_a64 
- nanopi_neo2 nanopi_neo_air nanopi_neo_plus2 nanopi_r1 oceanic_5205_5inmfd 
- orangepi_lite2 orangepi_one_plus orangepi_pc2 orangepi_prime orangepi_win 
- orangepi_zero3 orangepi_zero_plus orangepi_zero_plus2 pine64-lts pine64_plus 
- pine_h64 pinebook pinephone pinetab sopine_baseboard teres_i 
- transpeed-8k618-t x96_mate 
+ bananapi_m64 beelink_gs1 emlid_neutis_n5 emlid_neutis_n5_devboard 
+ libretech_all_h3_cc_h5 libretech_all_h3_it_h5 libretech_all_h5_cc_h5 
+ nanopi_a64 nanopi_neo2 nanopi_neo_air nanopi_neo_plus2 nanopi_r1 
+ nanopi_r1s_h5 oceanic_5205_5inmfd orangepi_3 orangepi_lite2 
+ orangepi_one_plus orangepi_pc2 orangepi_prime orangepi_win orangepi_zero2 
+ orangepi_zero2w orangepi_zero3 orangepi_zero_plus orangepi_zero_plus2 
+ pine64-lts pine64_plus pine_h64 pinebook pinephone pinetab sopine_baseboard 
+ tanix_tx6 teres_i transpeed-8k618-t x96_mate 
 
 TI am625 Devices:
 beagleplay 
 
 QCom Devices:
-dragonboard410c dragonboard820c 
+dragonboard410c dragonboard820c hmibsc qcm6490 qcom 
 
-Rockchips rk33xx series Devices:
-evb-px5 evb-rk3328 evb-rk3399 ficus-rk3399 firefly-rk3399 
- khadas-edge-captain-rk3399 khadas-edge-rk3399 khadas-edge-v-rk3399 
- nanopc-t4-rk3399 nanopi-m4-2gb-rk3399 nanopi-m4-rk3399 nanopi-neo4-rk3399 
- nanopi-r2c-plus-rk3328 nanopi-r2c-rk3328 orangepi-r1-plus-lts-rk3328 
- orangepi-r1-plus-rk3328 orangepi-rk3399 pinebook-pro-rk3399 
- pinephone-pro-rk3399 puma-rk3399 roc-cc-rk3328 roc-pc-mezzanine-rk3399 
- roc-pc-rk3399 rock-4c-plus-rk3399 rock-4se-rk3399 rock-pi-4-rk3399 
- rock-pi-4c-rk3399 rock-pi-e-rk3328 rock-pi-n10-rk3399pro rock64-rk3328 
- rock960-rk3399 rockpro64-rk3399 
+Rockchips Devices:
+eaidk-610-rk3399 evb-px5 evb-rk3328 evb-rk3399 ficus-rk3399 firefly-rk3399 
+ geekbox khadas-edge-captain-rk3399 khadas-edge-rk3399 khadas-edge-v-rk3399 
+ leez-rk3399 nanopc-t4-rk3399 nanopi-m4-2gb-rk3399 nanopi-m4-rk3399 
+ nanopi-m4b-rk3399 nanopi-neo4-rk3399 nanopi-r2c-plus-rk3328 
+ nanopi-r2c-rk3328 nanopi-r2s-rk3328 nanopi-r4s-rk3399 
+ orangepi-r1-plus-lts-rk3328 orangepi-r1-plus-rk3328 orangepi-rk3399 
+ pinebook-pro-rk3399 pinephone-pro-rk3399 puma-rk3399 roc-cc-rk3328 
+ roc-pc-mezzanine-rk3399 roc-pc-rk3399 rock-4c-plus-rk3399 rock-4se-rk3399 
+ rock-pi-4-rk3399 rock-pi-4c-rk3399 rock-pi-e-rk3328 rock-pi-e-v3-rk3328 
+ rock-pi-n10-rk3399pro rock64-rk3328 rock960-rk3399 rockpro64-rk3399 
 
 Other Devices:
 rpi02w rpi3 rpi4 
