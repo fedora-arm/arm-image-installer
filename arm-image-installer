@@ -24,12 +24,14 @@ Optional
 	--showboot	- Show boot messages, removes 'rhgb quiet' from kargs
 	--sysrq         - Enable System Request debugging of the kernel
 	--target=TARGET - target board for uboot
+	--wifi-ssid=SSID - Wi-Fi SSID to configure
+	--wifi-pass=PASS - Wi-Fi password to configure
 	-y              - Assumes yes, will not wait for confirmation
 Help
 	--supported     - List of hardware we support writing out boot firmware
 	--version       - Display version and exit
 
-Example: $(basename ${0}) --image=Fedora-Rawhide.xz --target=pine64_plus --media=/dev/mmcblk0
+Example: $(basename ${0}) --image=Fedora-Rawhide.xz --target=pine64_plus --media=/dev/mmcblk0 --wifi-ssid=MY_SSID --wifi-pass=MY_PASSWORD
 
 "
 }
@@ -130,6 +132,30 @@ while [ $# -gt 0 ]; do
 				shift
 			else
 				echo "$(basename ${0}): Error - '--args' expects an argument"
+				usage
+				exit 1
+			fi
+			;;
+		--wifi-ssid*)
+			if echo $1 | grep '=' >/dev/null ; then
+				WIFI_SSID=$(echo $1 | sed 's/^--wifi-ssid=//')
+			elif [ -n "$2" ]; then
+				WIFI_SSID=$2
+				shift
+			else
+				echo "$(basename ${0}): Error - '--wifi-ssid' expects an argument"
+				usage
+				exit 1
+			fi
+			;;
+		--wifi-pass*)
+			if echo $1 | grep '=' >/dev/null ; then
+				WIFI_PASS=$(echo $1 | sed 's/^--wifi-pass=//')
+			elif [ -n "$2" ]; then
+				WIFI_PASS=$2
+				shift
+			else
+				echo "$(basename ${0}): Error - '--wifi-pass' expects an argument"
 				usage
 				exit 1
 			fi
@@ -605,6 +631,34 @@ if [ "$SSH_KEY" != "" ]; then
 		echo "= SSH key $SSH_KEY : Not Found!"
 		echo "= WARNING: No SSH Key Added."
 	fi
+fi
+# Configure Wi-Fi if SSID and password are provided
+if [ "$WIFI_SSID" != "" ] && [ "$WIFI_PASS" != "" ]; then
+    echo "= Configuring Wi-Fi: $WIFI_SSID"
+    mkdir -p ${PREFIX}/etc/NetworkManager/system-connections/
+    # Use the SSID as the filename (replace spaces and special characters with underscores)
+    FILENAME=$(echo "$WIFI_SSID" | tr ' ' '_' | tr -cd '[:alnum:]._-').nmconnection
+    cat > ${PREFIX}/etc/NetworkManager/system-connections/$FILENAME <<-EOF
+[connection]
+id=$WIFI_SSID
+type=wifi
+interface-name=wlan0
+
+[wifi]
+mode=infrastructure
+ssid=$WIFI_SSID
+
+[wifi-security]
+key-mgmt=wpa-psk
+psk=$WIFI_PASS
+
+[ipv4]
+method=auto
+
+[ipv6]
+method=auto
+EOF
+    chmod 600 ${PREFIX}/etc/NetworkManager/system-connections/$FILENAME
 fi
 
 # Add console
