@@ -12,6 +12,7 @@ ARM disk image for use with various hardware targets.
  - Turn SE Linux on and off
  - Remove the root password
  - Update U-Boot for a Target
+ - Setup wifi connection
  
 Note that the list of supported devices is a list of devices that arm-image-installer
 supports setting up the early boot firmware, it does not indicate the level of
@@ -36,6 +37,10 @@ Optional
 	--showboot	- Show boot messages, removes 'rhgb quiet' from kargs
 	--sysrq         - Enable System Request debugging of the kernel
 	--target=TARGET - target board for uboot
+	--wifi-ssid=SSID        - Wi-Fi SSID to configure
+	--wifi-pass=PASS        - Wi-Fi password to configure
+	--wifi-security=TYPE    - Wi-Fi security type (wpa-psk, sae)
+	--wifi-hidden           - Connect to a hidden SSID
 	-y              - Assumes yes, will not wait for confirmation
 Help
 	--supported     - List of hardware we support writing out boot firmware
