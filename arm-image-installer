@@ -24,8 +24,10 @@ Optional
 	--showboot	- Show boot messages, removes 'rhgb quiet' from kargs
 	--sysrq         - Enable System Request debugging of the kernel
 	--target=TARGET - target board for uboot
-	--wifi-ssid=SSID - Wi-Fi SSID to configure
-	--wifi-pass=PASS - Wi-Fi password to configure
+	--wifi-ssid=SSID        - Wi-Fi SSID to configure
+	--wifi-pass=PASS        - Wi-Fi password to configure
+	--wifi-security=TYPE    - Wi-Fi security type (wpa-psk, sae)
+	--wifi-hidden           - Connect to a hidden SSID
 	-y              - Assumes yes, will not wait for confirmation
 Help
 	--supported     - List of hardware we support writing out boot firmware
@@ -137,29 +139,50 @@ while [ $# -gt 0 ]; do
 			fi
 			;;
 		--wifi-ssid*)
-			if echo $1 | grep '=' >/dev/null ; then
-				WIFI_SSID=$(echo $1 | sed 's/^--wifi-ssid=//')
-			elif [ -n "$2" ]; then
-				WIFI_SSID=$2
-				shift
-			else
-				echo "$(basename ${0}): Error - '--wifi-ssid' expects an argument"
-				usage
-				exit 1
-			fi
-			;;
-		--wifi-pass*)
-			if echo $1 | grep '=' >/dev/null ; then
-				WIFI_PASS=$(echo $1 | sed 's/^--wifi-pass=//')
-			elif [ -n "$2" ]; then
-				WIFI_PASS=$2
-				shift
-			else
-				echo "$(basename ${0}): Error - '--wifi-pass' expects an argument"
-				usage
-				exit 1
-			fi
-			;;
+            if echo $1 | grep '=' >/dev/null ; then
+                WIFI_SSID=$(echo $1 | sed 's/^--wifi-ssid=//')
+            elif [ -n "$2" ]; then
+                WIFI_SSID=$2
+                shift
+            else
+                echo "$(basename ${0}): Error - '--wifi-ssid' expects an argument"
+                usage
+                exit 1
+            fi
+            ;;
+        --wifi-pass*)
+            if echo $1 | grep '=' >/dev/null ; then
+                WIFI_PASS=$(echo $1 | sed 's/^--wifi-pass=//')
+            elif [ -n "$2" ]; then
+                WIFI_PASS=$2
+                shift
+            else
+                echo "$(basename ${0}): Error - '--wifi-pass' expects an argument"
+                usage
+                exit 1
+            fi
+            ;;
+        --wifi-security*)
+            if echo $1 | grep '=' >/dev/null ; then
+                WIFI_SECURITY=$(echo $1 | sed 's/^--wifi-security=//')
+            elif [ -n "$2" ]; then
+                WIFI_SECURITY=$2
+                shift
+            else
+                echo "$(basename ${0}): Error - '--wifi-security' expects an argument"
+                usage
+                exit 1
+            fi
+            # Validate the security type
+            if [[ "$WIFI_SECURITY" != "wpa-psk" && "$WIFI_SECURITY" != "sae" ]]; then
+                echo "$(basename ${0}): Error - Invalid Wi-Fi security type: $WIFI_SECURITY"
+                usage
+                exit 1
+            fi
+            ;;
+        --wifi-hidden)
+            WIFI_HIDDEN=true
+            ;;
 		--norootpass)
 			NOROOTPASS=1
 			;;
@@ -321,6 +344,10 @@ if [ "$CONSOLE" != "" ]; then
 	else
 		echo "= Console for $TARGET will be added."
 	fi
+fi
+# User ssh key
+if [ "$WIFI_SSID" != "" ]; then
+	echo "= Wifi ssid: $WIFI_SSID will autoconnect on boot."
 fi
 # User ssh key
 if [ "$SSH_KEY" != "" ]; then
@@ -632,32 +659,43 @@ if [ "$SSH_KEY" != "" ]; then
 		echo "= WARNING: No SSH Key Added."
 	fi
 fi
-# Configure Wi-Fi if SSID and password are provided
-if [ "$WIFI_SSID" != "" ] && [ "$WIFI_PASS" != "" ]; then
+
+# Configure Wi-Fi if SSID is provided
+if [ "$WIFI_SSID" != "" ]; then
     echo "= Configuring Wi-Fi: $WIFI_SSID"
-    mkdir -p ${PREFIX}/etc/NetworkManager/system-connections/
     # Use the SSID as the filename (replace spaces and special characters with underscores)
     FILENAME=$(echo "$WIFI_SSID" | tr ' ' '_' | tr -cd '[:alnum:]._-').nmconnection
     cat > ${PREFIX}/etc/NetworkManager/system-connections/$FILENAME <<-EOF
 [connection]
-id=$WIFI_SSID
+id=${WIFI_SSID}
 type=wifi
-interface-name=wlan0
 
 [wifi]
 mode=infrastructure
-ssid=$WIFI_SSID
+ssid=${WIFI_SSID}
+hidden=${WIFI_HIDDEN:-false}
+EOF
 
+    # Add security configuration if a password is provided
+    if [ -n "$WIFI_PASS" ]; then
+        cat >> ${PREFIX}/etc/NetworkManager/system-connections/$FILENAME <<-EOF
 [wifi-security]
-key-mgmt=wpa-psk
-psk=$WIFI_PASS
+key-mgmt=${WIFI_SECURITY:-wpa-psk}
+psk=${WIFI_PASS}
+EOF
+    fi
 
+    # Add common IPv4 and IPv6 settings
+    cat >> ${PREFIX}/etc/NetworkManager/system-connections/$FILENAME <<-EOF
 [ipv4]
 method=auto
 
 [ipv6]
 method=auto
+addr-gen-mode=default
 EOF
+
+    # Set file permissions
     chmod 600 ${PREFIX}/etc/NetworkManager/system-connections/$FILENAME
 fi
 
