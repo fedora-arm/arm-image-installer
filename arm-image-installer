@@ -20,6 +20,7 @@ Optional
 	--addkey        - /path/to/ssh-public-key
 	--args          - Optional kernel parameters listed in quotes
 	--ign-url	- url for ignition configuration file (IoT)
+	--ignition	- local path for ignition configuration file (IoT)
 	--norootpass    - Set the root password to the empty string
 	--relabel       - SELinux relabel root filesystem on first boot
 	--resizefs      - Resize root filesystem to fill media device
@@ -202,6 +203,22 @@ while [ $# -gt 0 ]; do
                                 exit 1
                         fi
                         ;;
+		--ignition)
+                        if echo $1 | grep '=' >/dev/null ; then
+                                IGNITION=$(echo $1 | sed 's/^--ignition=//')
+                        elif [ -n "$2" ]; then
+                                IGNITION=$2
+                                shift
+                        else
+                                echo "$(basename ${0}): Error - '--ignition' expects an argument"
+                                usage
+                                exit 1
+                        fi
+			# Explicitly expand the tilde if it's the first character
+                        if [ "$(echo "$IGNITION" | cut -c1)" = "~" ]; then
+                                IGNITION="${HOME}${IGNITION#~}"
+                        fi
+                        ;;
 		--norootpass)
 			NOROOTPASS=1
 			;;
@@ -311,6 +328,12 @@ if [ ! -e "$MEDIA" ]; then
 	exit 1
 fi
 
+# check only one ignition source was added
+if [ -n "$IGNITION" ] && [ -n "$IGN_URL" ]; then
+        echo "Error: Please pick one ignition source, local or url."
+        exit 1
+fi
+
 # Last chance to back out
 echo ""
 echo "====================================================="
@@ -377,7 +400,10 @@ if [ "$SHOWBOOT" != "" ]; then
         echo "= Boot messages will be shown onscreen."
 fi
 if [ "$IGN_URL" != "" ]; then
-	echo "= Ignition URL: $IGN_URL "
+        echo "= Ignition URL: $IGN_URL "
+fi
+if [ "$IGNITION" != "" ]; then
+	echo "= Ignition: $IGNITION "
 fi
 echo "= Version: $VERSION"
 echo "====================================================="
@@ -761,9 +787,22 @@ if [ "$SHOWBOOT" != "" ]; then
 		 sed -i 's|rhgb quiet ||g' /tmp/boot/loader/entries/*.conf
 fi
 
-if [ "$IGN_URL" != "" ]; then
-	echo "= Adding ignition url for configuraion on firstboot."
-	sed -i "s|true|true ignition.firstboot=1 ignition.config.url=${IGN_URL}|g" /tmp/boot/ignition.firstboot
+if [ -n "$IGN_URL" ]; then
+	if echo "$IGN_URL" | grep -q "://"; then
+		echo "= Adding ignition url for configuraion on firstboot."
+		sed -i "s|true|true ignition.firstboot=1 ignition.config.url=${IGN_URL}|g" /tmp/boot/ignition.firstboot
+	else
+		echo "Error: "$IGN_URL" is not a valid url."
+		exit 1
+	fi
+elif [ -f "$IGNITION" ]; then
+	echo "= Adding ignition file for configuraion on firstboot."
+	mkdir -p /tmp/boot/ignition
+	cp "$IGNITION" /tmp/boot/ignition/config.ign
+	sed -i "s|true|true ignition.firstboot=1 ignition.config.file=/ignition/config.ign|g" /tmp/boot/ignition.firstboot
+else
+	echo "Error: Local Ignition file '$IGNITION' not found!"
+	exit 1
 fi
 
 sync
