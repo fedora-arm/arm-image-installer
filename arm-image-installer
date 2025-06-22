@@ -19,23 +19,25 @@ Optional
 	--addconsole    - Add system console kernel parameter for the target
 	--addkey        - /path/to/ssh-public-key
 	--args          - Optional kernel parameters listed in quotes
-	--ign-url	- url for ignition configuration file (IoT)
+	--ign-url       - url for ignition configuration file (IoT)
 	--norootpass    - Set the root password to the empty string
 	--relabel       - SELinux relabel root filesystem on first boot
 	--resizefs      - Resize root filesystem to fill media device
-	--showboot	- Show boot messages, removes 'rhgb quiet' from kargs
+	--showboot      - Show boot messages, removes 'rhgb quiet' from kargs
 	--sysrq         - Enable System Request debugging of the kernel
 	--target=TARGET - target board for uboot
 	--wifi-ssid=SSID        - Wi-Fi SSID to configure
 	--wifi-pass=PASS        - Wi-Fi password to configure
 	--wifi-security=TYPE    - Wi-Fi security type (wpa-psk, sae)
+	--wifi-cloned-mac=MAC   - Wi-Fi cloned MAC setting (MAC address or
+	                         'preserve', 'permanent', 'random', 'stable', 'stable-ssid')
 	-y              - Assumes yes, will not wait for confirmation
 
 Help
 	--supported     - List of hardware we support writing out boot firmware
 	--version       - Display version and exit
 
-Example: $(basename ${0}) --image=Fedora-Rawhide.xz --target=pine64_plus --media=/dev/mmcblk0 --wifi-ssid=MY_SSID --wifi-pass=MY_PASSWORD
+Example: $(basename ${0}) --image=Fedora-Rawhide.xz --target=pine64_plus --media=/dev/mmcblk0 --wifi-ssid=MY_SSID --wifi-pass=MY_PASSWORD --wifi-cloned-mac=permanent
 
 "
 }
@@ -190,6 +192,23 @@ while [ $# -gt 0 ]; do
 				exit 1
 			fi
 			;;
+		--wifi-cloned-mac*)
+			if echo $1 | grep '=' >/dev/null ; then
+				WIFI_CLONED_MAC=$(echo $1 | sed 's/^--wifi-cloned-mac=//')
+			elif [ -n "$2" ]; then
+				WIFI_CLONED_MAC=$2
+				shift
+			else
+				# Default to 'permanent' if not set
+				WIFI_CLONED_MAC="permanent"
+			fi
+			# Validate the cloned MAC setting
+			if [[ ! "$WIFI_CLONED_MAC" =~ ^(preserve|permanent|random|stable|stable-ssid|[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5})$ ]]; then
+				echo "$(basename ${0}): Error - Invalid Wi-Fi cloned MAC setting: $WIFI_CLONED_MAC"
+				usage
+				exit 1
+			fi
+			;;
 		--ign-url)
                         if echo $1 | grep '=' >/dev/null ; then
                                 IGN_URL=$(echo $1 | sed 's/^--ign-url=//')
@@ -266,7 +285,7 @@ if [ "$MEDIA" = "" ]; then
 fi
 
 ROOTDISK="$(mount | grep "on / " | awk '{printf $1"\n"}')"
-case "$ROOTDISK" in  
+case "$ROOTDISK" in
   *nvme*)
     ROOTDISK="$(echo $ROOTDISK | head -c 10)"
     ;;
@@ -367,6 +386,10 @@ fi
 # wifi ssid to be added
 if [ "$WIFI_SSID" != "" ]; then
 	echo "= Wifi ssid: $WIFI_SSID will autoconnect on boot."
+fi
+# wifi cloned mac setting
+if [ "$WIFI_CLONED_MAC" != "" ]; then
+	echo "= Wi-Fi cloned MAC setting will be set to: $WIFI_CLONED_MAC"
 fi
 # User ssh key
 if [ "$SSH_KEY" != "" ]; then
@@ -695,6 +718,7 @@ type=wifi
 [wifi]
 mode=infrastructure
 ssid=${WIFI_SSID}
+cloned-mac-address=${WIFI_CLONED_MAC:-permanent}
 EOF
 
     # Add security configuration if a password is provided
