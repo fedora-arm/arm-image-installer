@@ -5,7 +5,18 @@
 
 # Automate Media Creation for Fedora ARM
 # Current version
-VERSION=5.0
+VERSION=5.3
+
+# Cleanup function for loopback devices
+cleanup_loopback() {
+	if [ -n "$LOOP_DEVICE" ] && [ -b "$LOOP_DEVICE" ]; then
+		echo "= Cleaning up loopback device $LOOP_DEVICE ..."
+		losetup -d "$LOOP_DEVICE" 2>/dev/null
+	fi
+}
+
+# Set trap to cleanup on exit
+trap cleanup_loopback EXIT INT TERM
 
 # usage message
 usage() {
@@ -13,13 +24,14 @@ usage() {
 Usage: $(basename ${0}) <options>
 
 	--image=IMAGE   - xz compressed image file name
-	--media=DEVICE  - media device file (/dev/[sdX|mmcblkX])
+	--media=DEVICE  - media device file (/dev/[sdX|mmcblkX]) or path to disk image file
 
 Optional
 	--addconsole    - Add system console kernel parameter for the target
 	--addkey        - /path/to/ssh-public-key
 	--args          - Optional kernel parameters listed in quotes
-	--ign-url       - url for ignition configuration file (IoT)
+	--ign-url	- url for ignition configuration file (IoT)
+	--ignition	- local path for ignition configuration file (IoT)
 	--norootpass    - Set the root password to the empty string
 	--relabel       - SELinux relabel root filesystem on first boot
 	--resizefs      - Resize root filesystem to fill media device
@@ -209,7 +221,7 @@ while [ $# -gt 0 ]; do
 				exit 1
 			fi
 			;;
-		--ign-url)
+		--ign-url*)
                         if echo $1 | grep '=' >/dev/null ; then
                                 IGN_URL=$(echo $1 | sed 's/^--ign-url=//')
                         elif [ -n "$2" ]; then
@@ -219,6 +231,22 @@ while [ $# -gt 0 ]; do
                                 echo "$(basename ${0}): Error - '--ign-url' expects an argument"
                                 usage
                                 exit 1
+                        fi
+                        ;;
+		--ignition*)
+                        if echo $1 | grep '=' >/dev/null ; then
+                                IGNITION=$(echo $1 | sed 's/^--ignition=//')
+                        elif [ -n "$2" ]; then
+                                IGNITION=$2
+                                shift
+                        else
+                                echo "$(basename ${0}): Error - '--ignition' expects an argument"
+                                usage
+                                exit 1
+                        fi
+			# Explicitly expand the tilde if it's the first character
+                        if [ "$(echo "$IGNITION" | cut -c1)" = "~" ]; then
+                                IGNITION="${HOME}${IGNITION#~}"
                         fi
                         ;;
 		--norootpass)
@@ -324,14 +352,45 @@ if [ ! -f "$IMAGE" ] && [ "$IMAGE" != "" ]; then
 	exit 1
 fi
 
-# device exists
+# device or file exists
 if [ ! -e "$MEDIA" ]; then
-	echo "Error: $MEDIA not found! Please choose an existing device."
+	echo "Error: $MEDIA not found! Please choose an existing device or file."
 	exit 1
 fi
 
+# If MEDIA is a regular file, set up a loopback device
+LOOP_DEVICE=""
+if [ -f "$MEDIA" ] && [ ! -b "$MEDIA" ]; then
+	# Check if file exists and has content, or if we need to create it
+	if [ ! -s "$MEDIA" ] && [ "$IMAGE" != "" ]; then
+		# File is empty or doesn't exist - we'll write an image to it
+		# No need to set up loop device yet, we'll do it after writing
+		MEDIA_FILE="$MEDIA"
+		echo "= Will create disk image file: $MEDIA"
+	else
+		# File already has content - set up loop device now
+		echo "====================================================="
+		echo "====================================================="
+		echo "= Setting up loopback device for $MEDIA ..."
+		LOOP_DEVICE=$(losetup --show --partscan -f "$MEDIA")
+		if [ $? -ne 0 ] || [ -z "$LOOP_DEVICE" ]; then
+			echo "Error: Failed to set up loopback device for $MEDIA"
+			exit 1
+		fi
+		echo "= Loopback device created: $LOOP_DEVICE"
+		# Save original MEDIA path and use loop device for all operations
+		MEDIA_FILE="$MEDIA"
+		MEDIA="$LOOP_DEVICE"
+	fi
+fi
+
+# check only one ignition source was added
+if [ -n "$IGNITION" ] && [ -n "$IGN_URL" ]; then
+        echo "Error: Please pick one ignition source, local or url."
+        exit 1
+fi
+
 # Last chance to back out
-echo ""
 echo "====================================================="
 
 # check to see if host system uses LVM and VG named fedora for root
@@ -400,7 +459,10 @@ if [ "$SHOWBOOT" != "" ]; then
         echo "= Boot messages will be shown onscreen."
 fi
 if [ "$IGN_URL" != "" ]; then
-	echo "= Ignition URL: $IGN_URL "
+        echo "= Ignition URL: $IGN_URL "
+fi
+if [ "$IGNITION" != "" ]; then
+	echo "= Ignition: $IGNITION "
 fi
 echo "= Version: $VERSION"
 echo "====================================================="
@@ -424,25 +486,51 @@ if [ "$NOASK" != 1 ]; then
 fi
 # umount before starting
 umount $MEDIA* > /dev/null 2>&1
-if [ "$(fdisk -l $MEDIA | grep LVM)" != "" ]   ; then
-	vgchange -a n "$(pvs 2> /dev/null | grep $MEDIA | awk '{print $2}')" > /dev/null 2>&1
-fi
+# Note: we can't deactivate LVM here because ROOTPART isn't set yet
+# The partition table hasn't been read at this point
 
 # Write the disk image to media
 if [ "$IMAGE" != "" ]; then
 	echo "= Writing: "
 	echo "= $IMAGE "
 	echo "= To: $MEDIA ...."
-	xzcat $IMAGE | dd of=$MEDIA oflag=direct bs=4M status=progress iflag=fullblock; sync; sleep 3
-	echo "= Writing image complete!"
+	if [ -n "$MEDIA_FILE" ]; then
+		# Writing to a file or loop device backed by a file - don't use oflag=direct
+		# (direct I/O doesn't work well with sparse files and loop devices)
+		xzcat $IMAGE | dd of=$MEDIA bs=4M status=progress iflag=fullblock; sync; sleep 3
+		echo "= Writing image complete!"
+		# Set up loop device if we haven't already
+		if [ -z "$LOOP_DEVICE" ]; then
+			echo "= Setting up loopback device for $MEDIA_FILE ..."
+			LOOP_DEVICE=$(losetup --show --partscan -f "$MEDIA_FILE")
+			if [ $? -ne 0 ] || [ -z "$LOOP_DEVICE" ]; then
+				echo "Error: Failed to set up loopback device for $MEDIA_FILE"
+				exit 1
+			fi
+			echo "= Loopback device created: $LOOP_DEVICE"
+			MEDIA="$LOOP_DEVICE"
+		fi
+	else
+		# Writing to a real block device - use oflag=direct for better performance
+		xzcat $IMAGE | dd of=$MEDIA oflag=direct bs=4M status=progress iflag=fullblock; sync; sleep 3
+		echo "= Writing image complete!"
+	fi
 fi
 # check to see how many partitions on the image
 partprobe "$MEDIA"
+sleep 2
 
 get_lvm_name () {
-	if [ "$(fdisk -l $MEDIA | grep LVM)" != "" ]   ; then
-		LVM_NAME=$(pvs --devices $ROOTPART 2> /dev/null | grep $MEDIA | awk '{print $2}')
-	fi
+	# Try to get VG name directly from the root partition using pvs
+	# This works because ROOTPART is set to the LVM physical volume partition
+	# Note: --devices must include both the base device AND the partition
+	LVM_NAME=$(pvs --devicesfile "" --devices "$MEDIA" --devices "$ROOTPART" -o vg_name --noheadings "$ROOTPART" 2>/dev/null | tr -d ' ')
+}
+
+get_lv_name () {
+	# Get the LV name from the VG - assumes there's only one LV in the VG
+	# Note: --devices must include both the base device AND the partition
+	LV_NAME=$(lvs --devicesfile "" --devices "$MEDIA" --devices "$ROOTPART" -o lv_name --noheadings "$LVM_NAME" 2>/dev/null | tr -d ' ')
 }
 
 add_bls_parameter()
@@ -465,6 +553,7 @@ add_kernel_parameter () {
 	fi
 }
 
+# Detect partitions - check with 'p' separator first (nvme, loop), then without (sd, mmcblk)
 if [ -e "$MEDIA"p5 ]; then
 	export FIRMPART="${MEDIA}p1"
 	BOOTPART="${MEDIA}p2"
@@ -540,13 +629,13 @@ if [ "$RESIZEFS" != "" ]; then
 	if [ "$PARTNUM" = "3" ]; then
 		if [ "$RENAME_LVM" = "1" ]; then
 		# rename VG if host system uses conflicting names
-			LVM_UUID=$(pvs --devices $ROOTPART -o +vguuid | grep $MEDIA | awk '{print $7}')
-			vgrename --devices $ROOTPART $LVM_UUID fedora-server
+			LVM_UUID=$(pvs --devicesfile "" --devices "$MEDIA" --devices "$ROOTPART" -o +vguuid | grep $MEDIA | awk '{print $7}')
+			vgrename --devicesfile "" --devices "$MEDIA" --devices "$ROOTPART" $LVM_UUID fedora-server
 			LVM_NAME=fedora-server
 		fi
 
 		get_lvm_name
-		vgchange --devices $ROOTPART -a n $LVM_NAME > /dev/null 2>&1
+		vgchange --devicesfile "" --devices "$MEDIA" --devices "$ROOTPART" -a n $LVM_NAME > /dev/null 2>&1
 
 		echo ", +" | sfdisk -N "$PARTNUM" "$MEDIA"
 		while [ $? != '0' ]; do
@@ -561,10 +650,11 @@ if [ "$RESIZEFS" != "" ]; then
 		sleep 5
 		partprobe "$MEDIA"
 		if [ "$LVM_NAME" != "" ]; then
-			vgchange --devices $ROOTPART -a y $LVM_NAME > /dev/null 2>&1
-			pvresize --devices $ROOTPART "$ROOTPART"
-			lvextend --devices $ROOTPART -l +100%FREE /dev/$LVM_NAME/root
-			ROOTLV="/dev/$LVM_NAME/root"
+			vgchange --devicesfile "" --devices "$MEDIA" --devices "$ROOTPART" -a y $LVM_NAME > /dev/null 2>&1
+			pvresize --devicesfile "" --devices "$MEDIA" --devices "$ROOTPART" "$ROOTPART"
+			get_lv_name
+			lvextend --devicesfile "" --devices "$MEDIA" --devices "$ROOTPART" -l +100%FREE /dev/$LVM_NAME/$LV_NAME
+			ROOTLV="/dev/$LVM_NAME/$LV_NAME"
 		fi
 	fi
 
@@ -588,8 +678,8 @@ get_lvm_name
 
 if [ "$RENAME_LVM" = "1" ] && [ "$LVM_NAME" != "fedora-server" ]; then
 # rename VG if host system uses conflicting names
-  LVM_UUID=$(pvs --devices $ROOTPART -o +vguuid | grep $MEDIA | awk '{print $7}')
-  vgrename --devices $ROOTPART $LVM_UUID fedora-server
+  LVM_UUID=$(pvs --devicesfile "" --devices "$MEDIA" --devices "$ROOTPART" -o +vguuid | grep $MEDIA | awk '{print $7}')
+  vgrename --devicesfile "" --devices "$MEDIA" --devices "$ROOTPART" $LVM_UUID fedora-server
   LVM_NAME=fedora-server
 fi
 
@@ -609,12 +699,13 @@ fi
 
 if [ "$RESIZEFS" = "" ]; then
 	get_lvm_name
-	vgchange --devices $ROOTPART -a y $LVM_NAME > /dev/null 2>&1
+	vgchange --devicesfile "" --devices "$MEDIA" --devices "$ROOTPART" -a y $LVM_NAME > /dev/null 2>&1
 fi
 
 if [ "$(grep /tmp/root /proc/mounts)" = "" ]; then
 	if [ "$LVM_NAME" != "" ]; then
-		mount "/dev/$LVM_NAME/root" /tmp/root > /dev/null 2>&1
+		get_lv_name
+		mount "/dev/$LVM_NAME/$LV_NAME" /tmp/root > /dev/null 2>&1
 	else
         	mount "$ROOTPART" /tmp/root
 	fi
@@ -628,11 +719,10 @@ fi
 
 # fix up grub.cfg to reflect the new vg name
 if [ "$RENAME_LVM" != "" ]; then
-	if [ -f /tmp/boot/loader/entries/*.conf ] && [ -f /tmp/boot/grub2/grub.cfg ]; then
-	sed -i 's|/dev/mapper/fedora-root|/dev/mapper/fedora--server-root|g; s|rd.lvm.lv=fedora/root|rd.lvm.lv=fedora-server/root|g' /tmp/boot/loader/entries/*.conf
-	sed -i 's|/dev/mapper/fedora-root|/dev/mapper/fedora--server-root|g; s|rd.lvm.lv=fedora/root|rd.lvm.lv=fedora-server/root|g' /tmp/boot/grub2/grub.cfg
-        fi
-
+	if [ -d /tmp/boot/loader/entries ] && [ -f /tmp/boot/grub2/grub.cfg ]; then
+		sed -i 's|/dev/mapper/fedora-root|/dev/mapper/fedora--server-root|g; s|rd.lvm.lv=fedora/root|rd.lvm.lv=fedora-server/root|g' /tmp/boot/loader/entries/*.conf
+		sed -i 's|/dev/mapper/fedora-root|/dev/mapper/fedora--server-root|g; s|rd.lvm.lv=fedora/root|rd.lvm.lv=fedora-server/root|g' /tmp/boot/grub2/grub.cfg
+	fi
 fi
 
 if [ "$IOT_IMAGE" = "1" ]; then
@@ -785,18 +875,46 @@ if [ "$SHOWBOOT" != "" ]; then
 		 sed -i 's|rhgb quiet ||g' /tmp/boot/loader/entries/*.conf
 fi
 
-if [ "$IGN_URL" != "" ]; then
-	echo "= Adding ignition url for configuraion on firstboot."
-	sed -i "s|true|true ignition.firstboot=1 ignition.config.url=${IGN_URL}|g" /tmp/boot/ignition.firstboot
+if [ -n "$IGN_URL" ]; then
+  if echo "$IGN_URL" | grep -q "://"; then
+    echo "= Adding ignition url for configuraion on firstboot."
+    sed -i "s|true|true ignition.firstboot=1 ignition.config.url=${IGN_URL}|g" /tmp/boot/ignition.firstboot
+  else
+    echo "Error: \"$IGN_URL\" is not a valid url."
+    exit 1
+  fi
+elif [ -n "$IGNITION" ]; then
+  if [ -f "$IGNITION" ]; then
+    echo "= Adding ignition file for configuraion on firstboot."
+    mkdir -p /tmp/boot/ignition
+    cp "$IGNITION" /tmp/boot/ignition/config.ign
+    sed -i "s|true|true ignition.firstboot=1 ignition.config.file=/ignition/config.ign|g" /tmp/boot/ignition.firstboot
+  else
+    echo "Error: Local Ignition file '$IGNITION' not found!"
+    exit 1
+  fi
 fi
 
 sync
 
 umount /tmp/root $BOOTPART $FIRMPART > /dev/null 2>&1
 if [ "$LVM_NAME" != "" ]; then
-	vgchange --devices $ROOTPART -a n $LVM_NAME > /dev/null 2>&1
+	vgchange --devicesfile "" --devices "$MEDIA" --devices "$ROOTPART" -a n $LVM_NAME > /dev/null 2>&1
 fi
 rmdir  /tmp/root /tmp/boot /tmp/fw > /dev/null 2>&1
+
+# Clean up loopback device if we created one
+if [ -n "$LOOP_DEVICE" ]; then
+	echo "= Detaching loopback device $LOOP_DEVICE ..."
+	losetup -d "$LOOP_DEVICE"
+	if [ $? -eq 0 ]; then
+		echo "= Loopback device detached successfully"
+		echo "= Custom image created: $MEDIA_FILE"
+	else
+		echo "= Warning: Failed to detach loopback device $LOOP_DEVICE"
+		echo "= You may need to manually detach it with: sudo losetup -d $LOOP_DEVICE"
+	fi
+fi
 
 if [ "$URL" != "" ]; then
 	echo
@@ -807,5 +925,9 @@ if [ "$URL" != "" ]; then
 fi
 
 echo ""
-echo "= Installation Complete! Insert into the $TARGET and boot."
+if [ -n "$LOOP_DEVICE" ]; then
+	echo "= Installation Complete! Custom image ready: $MEDIA_FILE"
+else
+	echo "= Installation Complete! Insert into the $TARGET and boot."
+fi
 exit 0
