@@ -11,10 +11,10 @@ Requires:	btrfs-progs
 Requires:	e2fsprogs
 Requires:	libselinux-utils
 Requires:	parted
-Requires:	sudo
 Requires:	util-linux
 Requires:	xfsprogs
 Requires:	xz
+Recommends:	sudo
 
 
 %description
