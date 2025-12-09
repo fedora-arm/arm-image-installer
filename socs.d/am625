@@ -17,11 +17,19 @@ cp -a /tmp/fw/* /tmp/fw_bk/
 umount /tmp/fw
 
 UUID="$(lsblk -no UUID $FIRMPART)"
-mkfs.vfat "$FIRMPART" &> /dev/null
+mkfs.vfat -F 32 "$FIRMPART" &> /dev/null
 if [ $? != 0 ] ; then
 	echo "ERROR: Firmware partition filesystem reformatting failed!"
 	cleanup
 fi
+
+DISK=$(echo "$FIRMPART" | sed -E 's/[0-9]+$//')
+PART=$(echo "$FIRMPART" | sed -E 's/^.*([0-9]+)$/\1/')
+
+echo "= Update Partition Table for ${DISK}: ${PART}"
+
+sfdisk --part-type $DISK $PART 0x0C
+sfdisk $DISK --activate $PART
 
 # restore the old filesystem UUID to match the /etc/fstab
 printf "\x${UUID:7:2}\x${UUID:5:2}\x${UUID:2:2}\x${UUID:0:2}" \
