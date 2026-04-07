@@ -1,0 +1,33 @@
+summary: Basic smoke test for Minimal image
+description: |
+    Quick smoke test that downloads a Minimal image and creates
+    a basic custom disk image, then verifies the image structure.
+
+    Minimal images use traditional partitions (no LVM, no OSTree).
+
+tag:
+    - quick
+    - smoke
+    - minimal
+
+provision:
+    how: virtual
+    image: fedora:latest
+    # Minimal requirements for basic test
+
+prepare:
+    - name: Install dependencies
+      how: shell
+      script: |
+        dnf install -y curl xz lvm2 parted e2fsprogs btrfs-progs util-linux xfsprogs openssh-clients sudo
+
+execute:
+    how: tmt
+    script: |
+        ./tests/test-minimal.sh
+    duration: 30m
+
+environment:
+    CACHE_DIR: /var/tmp/arm-image-installer-test-cache
+    TEST_OUTPUT_DIR: /var/tmp/arm-image-installer-tests
+    FEDORA_VERSION: "43"

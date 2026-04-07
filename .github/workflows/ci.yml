@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Cache Fedora ARM images
+      uses: actions/cache@v4
+      with:
+        path: /var/tmp/arm-image-installer-test-cache
+        key: fedora-arm-images-${{ hashFiles('tests/helpers/download-images.sh') }}-${{ github.run_id }}
+        restore-keys: |
+          fedora-arm-images-${{ hashFiles('tests/helpers/download-images.sh') }}-
+          fedora-arm-images-
+
+    - name: Free up disk space
+      run: |
+        # GitHub runners have ~14GB free, we need ~10GB for image download + output
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+        sudo apt-get clean
+        df -h
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          curl \
+          lvm2 \
+          xz-utils \
+          parted \
+          e2fsprogs \
+          btrfs-progs \
+          util-linux \
+          xfsprogs \
+          openssh-client
+
+    - name: Create cache and output directories
+      run: |
+        sudo mkdir -p /var/tmp/arm-image-installer-test-cache
+        sudo mkdir -p /var/tmp/arm-image-installer-tests
+        sudo chown -R $USER:$USER /var/tmp/arm-image-installer-test-cache /var/tmp/arm-image-installer-tests
+
+    - name: Run basic server test
+      run: |
+        sudo ./tests/test-server-basic.sh
+      timeout-minutes: 30
+      env:
+        CACHE_DIR: /var/tmp/arm-image-installer-test-cache
+        TEST_OUTPUT_DIR: /var/tmp/arm-image-installer-tests
+
+    - name: Cleanup test outputs
+      if: always()
+      run: |
+        sudo rm -rf /var/tmp/arm-image-installer-tests
+        # Keep cache directory for GitHub Actions cache to save

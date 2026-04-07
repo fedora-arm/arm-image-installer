@@ -11,6 +11,15 @@ files_to_sync:
     dest: .
 
 jobs:
+  - job: tests
+    trigger: pull_request
+    targets:
+      - fedora-stable
+      - fedora-development
+    tf_extra_params:
+      environments:
+        - arch: aarch64
+
   - job: copr_build
     trigger: pull_request
     targets:

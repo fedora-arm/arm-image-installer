@@ -1,0 +1,32 @@
+summary: IoT image test with ignition
+description: |
+    Test IoT image creation with ignition configuration.
+    Downloads latest IoT image, creates a custom image with ignition,
+    and verifies the image structure is correct.
+
+tag:
+    - iot
+    - ignition
+    - full
+
+provision:
+    how: virtual
+    image: fedora:latest
+    disk: 50      # 50GB for test image creation and downloads
+
+prepare:
+    - name: Install dependencies
+      how: shell
+      script: |
+        dnf install -y curl xz lvm2 parted e2fsprogs btrfs-progs util-linux xfsprogs openssh-clients sudo
+
+execute:
+    how: tmt
+    script: |
+        ./tests/test-iot.sh
+    duration: 30m
+
+environment:
+    CACHE_DIR: /var/tmp/arm-image-installer-test-cache
+    TEST_OUTPUT_DIR: /var/tmp/arm-image-installer-tests
+    FEDORA_VERSION: "43"

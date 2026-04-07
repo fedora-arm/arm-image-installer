@@ -1,0 +1,33 @@
+summary: Full test suite for arm-image-installer
+description: |
+    Complete test suite that tests Server image with full customization
+    options (resize, SSH keys, Wi-Fi, etc.) and verifies all modifications
+    were applied correctly by mounting and inspecting the image.
+
+tag:
+    - full
+    - server
+    - customization
+
+provision:
+    how: virtual
+    image: fedora:latest
+    memory: 4096  # 4GB RAM for image creation
+    disk: 50      # 50GB for test image creation (20GB output + downloads)
+
+prepare:
+    - name: Install dependencies
+      how: shell
+      script: |
+        dnf install -y curl xz lvm2 parted e2fsprogs btrfs-progs util-linux xfsprogs openssh-clients sudo
+
+execute:
+    how: tmt
+    script: |
+        ./tests/test-server-customized.sh
+    duration: 30m
+
+environment:
+    CACHE_DIR: /var/tmp/arm-image-installer-test-cache
+    TEST_OUTPUT_DIR: /var/tmp/arm-image-installer-tests
+    FEDORA_VERSION: "43"

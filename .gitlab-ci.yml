@@ -1,0 +1,300 @@
+---
+# GitLab CI/CD for arm-image-installer
+# Builds RPMs and runs tests on x86_64 and aarch64
+
+stages:
+  - build
+  - test-quick
+  - test-integration
+
+variables:
+  SPEC_FILE: "arm-image-installer.spec"
+  CACHE_DIR: "/var/tmp/arm-image-installer-test-cache"
+  TEST_OUTPUT_DIR: "/var/tmp/arm-image-installer-tests"
+  FEDORA_VERSION: "43"
+
+# ========================================
+# RPM Build Stage
+# ========================================
+
+build-rpm-x86:
+  stage: build
+  tags:
+    - virt x86_64
+  script:
+    - echo "=== Building RPM on x86_64 ==="
+    - dnf install -y rpm-build rpmdevtools
+    - rpmdev-setuptree
+    - version=$(grep "^Version:" $SPEC_FILE | awk '{print $2}')
+    - echo "Building version ${version}"
+    - tar czf ~/rpmbuild/SOURCES/arm-image-installer-${version}.tar.gz \
+        --transform "s,^\.,arm-image-installer-${version}," \
+        --exclude=.git --exclude=.gitlab-ci.yml --exclude=rpmbuild .
+    - rpmbuild -ba $SPEC_FILE
+    - ls -lh ~/rpmbuild/RPMS/noarch/
+    - ls -lh ~/rpmbuild/SRPMS/
+  artifacts:
+    name: "rpm-x86-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - ~/rpmbuild/RPMS/noarch/*.rpm
+      - ~/rpmbuild/SRPMS/*.rpm
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+
+build-rpm-arm64:
+  stage: build
+  tags:
+    - aarch64 rpi rpi4-5
+  script:
+    - echo "=== Building RPM on aarch64 ==="
+    - dnf install -y rpm-build rpmdevtools
+    - rpmdev-setuptree
+    - version=$(grep "^Version:" $SPEC_FILE | awk '{print $2}')
+    - echo "Building version ${version}"
+    - tar czf ~/rpmbuild/SOURCES/arm-image-installer-${version}.tar.gz \
+        --transform "s,^\.,arm-image-installer-${version}," \
+        --exclude=.git --exclude=.gitlab-ci.yml --exclude=rpmbuild .
+    - rpmbuild -ba $SPEC_FILE
+    - ls -lh ~/rpmbuild/RPMS/noarch/
+    - ls -lh ~/rpmbuild/SRPMS/
+  artifacts:
+    name: "rpm-arm64-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - ~/rpmbuild/RPMS/noarch/*.rpm
+      - ~/rpmbuild/SRPMS/*.rpm
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+
+# ========================================
+# Quick Test Stage
+# ========================================
+
+test-install-x86:
+  stage: test-quick
+  tags:
+    - virt x86_64
+  dependencies:
+    - build-rpm-x86
+  script:
+    - echo "=== Testing RPM installation on x86_64 ==="
+    - dnf install -y ~/rpmbuild/RPMS/noarch/arm-image-installer-*.rpm
+    - echo "=== Running basic command tests ==="
+    - arm-image-installer --help
+    - arm-image-installer --supported
+    - arm-image-installer --version || true
+    - echo "=== Verifying binaries ==="
+    - which arm-image-installer
+    - which fedora-arm-image-installer
+    - which rpi-uboot-update
+    - which spi-flashing-disk
+    - which update-uboot
+    - which update-x13s-bios
+    - echo "=== Verifying data files ==="
+    - test -d /usr/share/arm-image-installer/socs.d
+    - test -d /usr/share/arm-image-installer/boards.d
+    - ls /usr/share/arm-image-installer/socs.d/
+    - ls /usr/share/arm-image-installer/boards.d/
+    - echo "=== All quick tests passed on x86_64 ==="
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+
+test-install-arm64:
+  stage: test-quick
+  tags:
+    - aarch64 rpi rpi4-5
+  dependencies:
+    - build-rpm-arm64
+  script:
+    - echo "=== Testing RPM installation on aarch64 ==="
+    - dnf install -y ~/rpmbuild/RPMS/noarch/arm-image-installer-*.rpm
+    - echo "=== Running basic command tests ==="
+    - arm-image-installer --help
+    - arm-image-installer --supported
+    - arm-image-installer --version || true
+    - echo "=== Verifying binaries ==="
+    - which arm-image-installer
+    - which fedora-arm-image-installer
+    - which rpi-uboot-update
+    - which spi-flashing-disk
+    - which update-uboot
+    - which update-x13s-bios
+    - echo "=== Verifying data files ==="
+    - test -d /usr/share/arm-image-installer/socs.d
+    - test -d /usr/share/arm-image-installer/boards.d
+    - ls /usr/share/arm-image-installer/socs.d/
+    - ls /usr/share/arm-image-installer/boards.d/
+    - echo "=== All quick tests passed on aarch64 ==="
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+
+# ========================================
+# Integration Test Stage (Manual/Heavy)
+# ========================================
+
+test-integration-basic:
+  stage: test-integration
+  tags:
+    - virt x86_64
+  script:
+    - echo "=== Running basic integration test ==="
+    - echo "Installing dependencies..."
+    - dnf install -y curl xz lvm2 parted e2fsprogs btrfs-progs util-linux xfsprogs openssh-clients sudo
+    - echo "Creating test directories..."
+    - mkdir -p $CACHE_DIR
+    - mkdir -p $TEST_OUTPUT_DIR
+    - echo "Running test-server-basic.sh..."
+    - ./tests/test-server-basic.sh
+    - echo "=== Integration test complete ==="
+  timeout: 45m
+  when: manual
+  allow_failure: true
+  artifacts:
+    when: always
+    name: "test-logs-basic-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - /var/tmp/arm-image-installer-tests/*.log
+    expire_in: 3 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+
+test-integration-customized:
+  stage: test-integration
+  tags:
+    - virt x86_64
+  script:
+    - echo "=== Running customized server integration test ==="
+    - echo "Installing dependencies..."
+    - dnf install -y curl xz lvm2 parted e2fsprogs btrfs-progs util-linux xfsprogs openssh-clients sudo
+    - echo "Creating test directories..."
+    - mkdir -p $CACHE_DIR
+    - mkdir -p $TEST_OUTPUT_DIR
+    - echo "Running test-server-customized.sh..."
+    - ./tests/test-server-customized.sh
+    - echo "=== Customized integration test complete ==="
+  timeout: 45m
+  when: manual
+  allow_failure: true
+  artifacts:
+    when: always
+    name: "test-logs-customized-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - /var/tmp/arm-image-installer-tests/*.log
+    expire_in: 3 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+
+test-integration-iot:
+  stage: test-integration
+  tags:
+    - virt x86_64
+  script:
+    - echo "=== Running IoT image integration test ==="
+    - echo "Installing dependencies..."
+    - dnf install -y curl xz lvm2 parted e2fsprogs btrfs-progs util-linux xfsprogs openssh-clients sudo
+    - echo "Creating test directories..."
+    - mkdir -p $CACHE_DIR
+    - mkdir -p $TEST_OUTPUT_DIR
+    - echo "Running test-iot.sh..."
+    - ./tests/test-iot.sh
+    - echo "=== IoT integration test complete ==="
+  timeout: 45m
+  when: manual
+  allow_failure: true
+  artifacts:
+    when: always
+    name: "test-logs-iot-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - /var/tmp/arm-image-installer-tests/*.log
+    expire_in: 3 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+
+test-integration-iot-customized:
+  stage: test-integration
+  tags:
+    - virt x86_64
+  script:
+    - echo "=== Running IoT customized image integration test ==="
+    - echo "Installing dependencies..."
+    - dnf install -y curl xz lvm2 parted e2fsprogs btrfs-progs util-linux xfsprogs openssh-clients sudo
+    - echo "Creating test directories..."
+    - mkdir -p $CACHE_DIR
+    - mkdir -p $TEST_OUTPUT_DIR
+    - echo "Running test-iot-customized.sh..."
+    - ./tests/test-iot-customized.sh
+    - echo "=== IoT customized integration test complete ==="
+  timeout: 45m
+  when: manual
+  allow_failure: true
+  artifacts:
+    when: always
+    name: "test-logs-iot-customized-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - /var/tmp/arm-image-installer-tests/*.log
+    expire_in: 3 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+
+test-integration-minimal:
+  stage: test-integration
+  tags:
+    - virt x86_64
+  script:
+    - echo "=== Running Minimal image integration test ==="
+    - echo "Installing dependencies..."
+    - dnf install -y curl xz lvm2 parted e2fsprogs btrfs-progs util-linux xfsprogs openssh-clients sudo
+    - echo "Creating test directories..."
+    - mkdir -p $CACHE_DIR
+    - mkdir -p $TEST_OUTPUT_DIR
+    - echo "Running test-minimal.sh..."
+    - ./tests/test-minimal.sh
+    - echo "=== Minimal integration test complete ==="
+  timeout: 45m
+  when: manual
+  allow_failure: true
+  artifacts:
+    when: always
+    name: "test-logs-minimal-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - /var/tmp/arm-image-installer-tests/*.log
+    expire_in: 3 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+
+test-integration-minimal-customized:
+  stage: test-integration
+  tags:
+    - virt x86_64
+  script:
+    - echo "=== Running Minimal customized image integration test ==="
+    - echo "Installing dependencies..."
+    - dnf install -y curl xz lvm2 parted e2fsprogs btrfs-progs util-linux xfsprogs openssh-clients sudo
+    - echo "Creating test directories..."
+    - mkdir -p $CACHE_DIR
+    - mkdir -p $TEST_OUTPUT_DIR
+    - echo "Running test-minimal-customized.sh..."
+    - ./tests/test-minimal-customized.sh
+    - echo "=== Minimal customized integration test complete ==="
+  timeout: 45m
+  when: manual
+  allow_failure: true
+  artifacts:
+    when: always
+    name: "test-logs-minimal-customized-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - /var/tmp/arm-image-installer-tests/*.log
+    expire_in: 3 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
