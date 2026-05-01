@@ -27,6 +27,7 @@ Usage: $(basename ${0}) <options>
 	--media=DEVICE  - media device file (/dev/[sdX|mmcblkX]) or path to disk image file
 
 Optional
+	--add-copr      - Install u-boot from COPR (pbrobinson/u-boot) for rk35xx boards
 	--addconsole    - Add system console kernel parameter for the target
 	--addkey        - /path/to/ssh-public-key
 	--args          - Optional kernel parameters listed in quotes
@@ -55,11 +56,14 @@ Example: $(basename ${0}) --image=Fedora-Rawhide.xz --target=pine64_plus --media
 # Set some global variables for the command directory, target board directory,
 # and valid targets.
 DIR=$(dirname $0)
-if [ -d "/usr/share/arm-image-installer/boards.d" ]; then
+# Prefer local checkout over system installation
+if [ -d "${DIR}/boards.d" ]; then
+	BOARDDIR="${DIR}/boards.d"
+	DOC_DIR="${DIR}/"
+elif [ -d "/usr/share/arm-image-installer/boards.d" ]; then
 	BOARDDIR="/usr/share/arm-image-installer/boards.d"
 	DOC_DIR="/usr/share/doc/arm-image-installer/"
 else
-	DIR=$(dirname $0)
 	BOARDDIR="${DIR}/boards.d"
 	DOC_DIR="${DIR}/"
 fi
@@ -119,6 +123,9 @@ while [ $# -gt 0 ]; do
 				usage
 				exit 1
 			fi
+			;;
+		--add-copr)
+			ADD_COPR=1
 			;;
 		--addkey*)
 			if echo $1 | grep '=' >/dev/null ; then
@@ -322,9 +329,23 @@ fi
 
 # check for boards
 if [ "$TARGET" != "" ] && ! [ -e "${BOARDDIR}/${TARGET}" ]; then
-	echo "Error: You must choose a supported board or none at all."
-	usage
-	exit 1
+	# If --add-copr is set, check if it's an rk35xx board
+	if [ "$ADD_COPR" = "1" ]; then
+		TARGET_SOC=$(echo "$TARGET" | grep -oE 'rk35[0-9]{2}')
+		if [ -n "$TARGET_SOC" ]; then
+			# rk35xx board with --add-copr, will validate SoC later
+			:
+		else
+			echo "Error: You must choose a supported board or none at all."
+			echo "With --add-copr, only rk35xx boards are supported."
+			usage
+			exit 1
+		fi
+	else
+		echo "Error: You must choose a supported board or none at all."
+		usage
+		exit 1
+	fi
 fi
 
 # image exists
@@ -369,6 +390,29 @@ fi
 if [ -n "$IGNITION" ] && [ -n "$IGN_URL" ]; then
         echo "Error: Please pick one ignition source, local or url."
         exit 1
+fi
+
+# Validate COPR board support if requested
+if [ "$ADD_COPR" = "1" ]; then
+	# List of supported boards for COPR (rk35xx series: rk3566, rk3568, rk3576, rk3588)
+	COPR_SUPPORTED_BOARDS="rk3566 rk3568 rk3576 rk3588"
+
+	# Extract the SoC from the target name (e.g., rock5b-rk3588 -> rk3588)
+	TARGET_SOC=$(echo "$TARGET" | grep -oE 'rk35[0-9]{2}')
+
+	if [ -z "$TARGET_SOC" ]; then
+		echo "Error: --add-copr requires a target board with rk35xx SoC."
+		echo "Supported: rk3566, rk3568, rk3576, rk3588 based boards"
+		echo "Your target: $TARGET"
+		exit 1
+	fi
+
+	# Check if the SoC is in the supported list
+	if ! echo "$COPR_SUPPORTED_BOARDS" | grep -qw "$TARGET_SOC"; then
+		echo "Error: Target SoC $TARGET_SOC is not supported by COPR."
+		echo "Supported SoCs: $COPR_SUPPORTED_BOARDS"
+		exit 1
+	fi
 fi
 
 # Last chance to back out
@@ -441,6 +485,10 @@ fi
 if [ "$IGNITION" != "" ]; then
 	echo "= Ignition: $IGNITION "
 fi
+# COPR repository warning
+if [ "$ADD_COPR" != "" ]; then
+	echo "= COPR repository (pbrobinson/u-boot) will be enabled on this system"
+fi
 echo "= Version: $VERSION"
 echo "====================================================="
 echo " "
@@ -461,6 +509,36 @@ if [ "$NOASK" != 1 ]; then
 		exit 0
 	fi
 fi
+
+# Install COPR repository and arm-images-copr package if requested
+if [ "$ADD_COPR" = "1" ]; then
+	# Check if COPR repo is already enabled
+	if dnf repolist --enabled | grep -q 'copr.*pbrobinson.*u-boot'; then
+		echo "= COPR repository pbrobinson/u-boot already enabled"
+	else
+		echo "= Enabling COPR repository: pbrobinson/u-boot"
+		# Enable COPR repo on local system (use fedora-44-aarch64 explicitly)
+		if ! dnf copr enable -y pbrobinson/u-boot fedora-44-aarch64; then
+			echo "Error: Failed to enable COPR repository"
+			echo "Please ensure dnf-plugins-core is installed: dnf install dnf-plugins-core"
+			exit 1
+		fi
+	fi
+
+	# Check if uboot-images-copr is already installed
+	if rpm -q uboot-images-copr >/dev/null 2>&1; then
+		echo "= Package uboot-images-copr already installed"
+	else
+		echo "= Installing uboot-images-copr package..."
+		if ! dnf install -y uboot-images-copr; then
+			echo "Error: Failed to install uboot-images-copr package"
+			exit 1
+		fi
+	fi
+
+	echo "= Using u-boot from COPR (installed on host system)"
+fi
+
 # umount before starting
 umount $MEDIA* > /dev/null 2>&1
 # Note: we can't deactivate LVM here because ROOTPART isn't set yet
@@ -713,13 +791,26 @@ fi
 
 # determine uboot and write to disk
 if [ "$TARGET" != "" ]; then
+	# IMAGE_ROOT always points to mounted image, PREFIX is temporarily set for u-boot sourcing
+	IMAGE_ROOT="$PREFIX"
+
+	# Use COPR files from host system if requested, otherwise use image files
+	if [ "$ADD_COPR" = "1" ]; then
+		UBOOT_PREFIX=""
+	else
+		UBOOT_PREFIX="$IMAGE_ROOT"
+	fi
+
 	if echo "$TARGET" | grep -q 'rpi[34]' || [ "$TARGET" = "beagleplay" ]; then
-		. "${BOARDDIR}/${TARGET}"
-	elif [ -d "${PREFIX}/usr/share/uboot/${TARGET}" ]; then
-		. "${BOARDDIR}/${TARGET}"
+		PREFIX="$UBOOT_PREFIX" . "${BOARDDIR}/${TARGET}"
+	elif [ -d "${UBOOT_PREFIX}/usr/share/uboot/${TARGET}" ]; then
+		PREFIX="$UBOOT_PREFIX" . "${BOARDDIR}/${TARGET}"
 	else
 		echo "= No U-Boot files found for $TARGET."
 	fi
+
+	# Restore PREFIX to image mount point for remaining operations
+	PREFIX="$IMAGE_ROOT"
 else
 	echo "= No U-boot will be written."
 	TARGET="board"

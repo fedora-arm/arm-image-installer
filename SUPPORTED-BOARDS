@@ -9,8 +9,8 @@ a64-olinuxino a64-olinuxino-emmc amarula_a64_relic bananapi_m2_plus_h5
  pine64-lts pine64_plus pine_h64 pinebook pinephone pinetab sopine_baseboard 
  tanix_tx6 teres_i transpeed-8k618-t x96_mate 
 
-TI am625 Devices:
-beagleplay 
+TI Devices:
+beagleplay beagley-ai
 
 QCom Devices:
 dragonboard410c dragonboard820c hmibsc qcm6490 qcom 
