@@ -512,6 +512,11 @@ fi
 
 # Install COPR repository and arm-images-copr package if requested
 if [ "$ADD_COPR" = "1" ]; then
+	# Check if dnf is available (Fedora/RHEL/CentOS only)
+	if ! command -v dnf >/dev/null 2>&1; then
+		echo "Error: --add-copr requires dnf (Fedora/RHEL/CentOS)"
+		exit 1
+	fi
 	# Check if COPR repo is already enabled
 	if dnf repolist --enabled | grep -q 'copr.*pbrobinson.*u-boot'; then
 		echo "= COPR repository pbrobinson/u-boot already enabled"
@@ -917,7 +922,7 @@ if [ "$CONSOLE" = "1" ]; then
 fi
 
 # check if host system has selinux disabled, if it does autorelabel is required
-if [ "$(getenforce)" = "Disabled" ]; then
+if command -v getenforce >/dev/null 2>&1 && [ "$(getenforce)" = "Disabled" ]; then
 	echo "= NOTE: System Relabel required on first boot."
 	RELABEL="1"
 fi
