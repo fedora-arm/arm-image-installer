@@ -13,6 +13,7 @@ allwinner = ""
 am625 = ""
 qcom = ""
 rk3xxx = ""
+rk35xx = ""
 other = ""
 
 for entry in sorted(os.listdir('.')):
@@ -26,6 +27,8 @@ for entry in sorted(os.listdir('.')):
             qcom += "%s " % entry
         elif 'rk3xxx' == os.path.basename(os.path.realpath(entry)):
             rk3xxx += "%s " % entry
+        elif 'rk35xx' == os.path.basename(os.path.realpath(entry)):
+            rk35xx += "%s " % entry
         else:
             if entry != 'none':
                 other += "%s " % entry
@@ -40,8 +43,11 @@ printboards(am625)
 print("QCom Devices:")
 printboards(qcom)
 
-print("Rockchips Devices:")
+print("Rockchip rk3xxx Devices:")
 printboards(rk3xxx)
+
+print("Rockchip rk35xx Devices:")
+printboards(rk35xx)
 
 print("Other Devices:")
 printboards(other)
