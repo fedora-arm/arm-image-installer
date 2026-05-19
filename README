@@ -13,15 +13,15 @@ ARM disk image for use with various hardware targets.
  - Remove the root password
  - Update U-Boot for a Target
  - Setup wifi connection, security options supported are `wpa-psk`(default) for WPA2(mostly used) and `sae` for WPA3.
- 
+
 Note that the list of supported devices is a list of devices that arm-image-installer
 supports setting up the early boot firmware, it does not indicate the level of
 support for the device in Fedora for things like kernel drivers, functionality like
 display, audio, USB or any other specific hardware feature.
 
-To add additional support, create a code snippet file 
-(bash script) in the "boards.d" subdirectory with the commands 
-needed to write U-Boot for the target board. 
+To add additional support, create a code snippet file
+(bash script) in the "boards.d" subdirectory with the commands
+needed to write U-Boot for the target board.
 
 Usage: arm-image-installer <options>
 
@@ -40,6 +40,8 @@ Optional
 	--wifi-ssid=SSID        - Wi-Fi SSID to configure
 	--wifi-pass=PASS        - Wi-Fi password to configure
 	--wifi-security=TYPE    - Wi-Fi security type (wpa-psk, sae)
+	--wifi-cloned-mac=MAC   - Wi-Fi cloned MAC setting (MAC address or
+	                         'preserve', 'permanent', 'random', 'stable', 'stable-ssid')
 	-y              - Assumes yes, will not wait for confirmation
 Help
 	--supported     - List of hardware we support writing out boot firmware
