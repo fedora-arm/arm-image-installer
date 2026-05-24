@@ -124,7 +124,7 @@ if [[ $KOJI_TAG != '' ]]; then
 fi
 # determine uboot and write to disk
 if [ "$TARGET" != "" ]; then
-        if [ "$TARGET" = "rpi[34]" ]; then
+        if echo "$TARGET" | grep -qE '^rpi(02w|3|4)$'; then
                 . "${BOARDDIR}/${TARGET}"
         elif [ -d "${PREFIX}/usr/share/uboot/${TARGET}" ]; then
                 . "${BOARDDIR}/${TARGET}"

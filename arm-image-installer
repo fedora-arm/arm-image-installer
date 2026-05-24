@@ -801,7 +801,7 @@ if [ "$TARGET" != "" ]; then
 		UBOOT_PREFIX="$IMAGE_ROOT"
 	fi
 
-	if echo "$TARGET" | grep -q 'rpi[34]' || [ "$TARGET" = "beagleplay" ]; then
+	if echo "$TARGET" | grep -qE '^rpi(02w|3|4)$' || [ "$TARGET" = "beagleplay" ]; then
 		PREFIX="$UBOOT_PREFIX" . "${BOARDDIR}/${TARGET}"
 	elif [ -d "${UBOOT_PREFIX}/usr/share/uboot/${TARGET}" ]; then
 		PREFIX="$UBOOT_PREFIX" . "${BOARDDIR}/${TARGET}"
@@ -911,7 +911,7 @@ if [ "$CONSOLE" = "1" ]; then
 	echo "= Adding console $SYSCON to kernel parameters ..."
 	add_kernel_parameter "console=$SYSCON console=tty0"
 
-	if echo "$TARGET" | grep -q 'rpi[34]'; then
+	if echo "$TARGET" | grep -qE '^rpi(02w|3|4)$'; then
 		sed -i "s|# enable_uart=1|enable_uart=1|" /tmp/fw/config.txt
 	fi
 fi
