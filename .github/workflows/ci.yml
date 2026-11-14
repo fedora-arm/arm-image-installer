@@ -36,3 +36,11 @@ jobs:
           ./arm-image-installer --version
           ./arm-image-installer --supported
           python3 list-targets.py
+
+      - name: Check SUPPORTED-BOARDS matches boards.d
+        run: |
+          python3 list-targets.py > /tmp/SUPPORTED-BOARDS.generated
+          if ! diff -u SUPPORTED-BOARDS /tmp/SUPPORTED-BOARDS.generated; then
+            echo "::error::SUPPORTED-BOARDS is out of date. Regenerate it with: python3 list-targets.py > SUPPORTED-BOARDS"
+            exit 1
+          fi

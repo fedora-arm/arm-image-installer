@@ -24,7 +24,8 @@ for entry in sorted(os.listdir('.')):
             am625 += "%s " % entry
         elif 'qcom' == os.path.basename(os.path.realpath(entry)):
             qcom += "%s " % entry
-        elif 'rk3xxx' == os.path.basename(os.path.realpath(entry)):
+        elif os.path.basename(os.path.realpath(entry)).startswith('rk3'):
+            # all rk3* SoCs (rk3xxx, rk35xx, ...) are Rockchip devices
             rk3xxx += "%s " % entry
         else:
             if entry != 'none':
