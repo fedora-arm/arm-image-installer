@@ -360,6 +360,98 @@ if [ ! -e "$MEDIA" ]; then
 	exit 1
 fi
 
+# Check the proposed device is unused before we consider overwriting it.
+# Report mounted partitions, active swap and active LVM volumes, and offer
+# to unmount partitions and deactivate any active LVM volumes they find.
+check_media_in_use () {
+	# Regular files can't be mounted or hold LVM, nothing to check
+	if ! [ -b "$MEDIA" ]; then
+		return 0
+	fi
+
+	# Mounted filesystems and swap on $MEDIA or any of its partitions
+	MOUNTED_ON_MEDIA="$(lsblk -nro NAME,MOUNTPOINT "$MEDIA" 2>/dev/null | awk '$2 != "" && $2 != "[SWAP]" {printf "/dev/%s ", $1}')"
+	SWAP_ON_MEDIA="$(lsblk -nro NAME,MOUNTPOINT "$MEDIA" 2>/dev/null | awk '$2 == "[SWAP]" {printf "/dev/%s ", $1}')"
+	# mdraid arrays assembled from components on $MEDIA
+	MD_ON_MEDIA="$(lsblk -nro NAME,TYPE "$MEDIA" 2>/dev/null | awk '$2 == "raid" {printf "/dev/%s ", $1}')"
+	# Volume groups with a physical volume on $MEDIA or any of its partitions
+	PVS_ON_MEDIA="$(pvs --noheadings -o pv_name,vg_name 2>/dev/null | awk -v media="$MEDIA" 'index($1, media) == 1 && !seen[$2]++ {printf "%s ", $2}')"
+	# Of those, the ones with at least one active logical volume
+	ACTIVE_VGS=""
+	for VG in $PVS_ON_MEDIA; do
+		if lvs --noheadings -o lv_attr "$VG" 2>/dev/null | tr -d ' ' | grep -q '^.\{3\}a'; then
+			ACTIVE_VGS="$ACTIVE_VGS $VG"
+		fi
+	done
+
+	if [ -z "$MOUNTED_ON_MEDIA" ] && [ -z "$SWAP_ON_MEDIA" ] && [ -z "$ACTIVE_VGS" ] && [ -z "$MD_ON_MEDIA" ]; then
+		return 0
+	fi
+
+	echo ""
+	echo " ============================================================"
+	echo " ** WARNING: $MEDIA appears to be in use:"
+	lsblk "$MEDIA" 2>/dev/null
+	echo " ============================================================"
+
+	if [ -n "$MD_ON_MEDIA" ]; then
+		echo "Error: $MEDIA is part of active mdraid array(s): $MD_ON_MEDIA"
+		echo "Stop the array(s) first with 'mdadm --stop <array>' and try again."
+		exit 1
+	fi
+
+	if [ "$NOASK" != 1 ]; then
+		echo " ** I can unmount the partitions, turn off swap and deactivate"
+		echo " ** the active LVM volumes on $MEDIA before writing."
+		echo " ** Do you wish me to do that? (type 'yes' to release $MEDIA)"
+		echo " ============================================================"
+		# wait for agreement
+		printf " = Continue? "
+		read AGREE
+		if [ "$(echo ${AGREE} | tr '[:lower:]' '[:upper:]')" != "YES" ]; then
+			echo "User exit, no image written."
+			exit 0
+		fi
+	fi
+
+	for PART in $MOUNTED_ON_MEDIA; do
+		echo "= Unmounting $PART"
+		umount "$PART" > /dev/null 2>&1
+	done
+	for PART in $SWAP_ON_MEDIA; do
+		echo "= Turning off swap on $PART"
+		swapoff "$PART" > /dev/null 2>&1
+	done
+	for VG in $ACTIVE_VGS; do
+		echo "= Deactivating LVM volume group $VG"
+		vgchange -an "$VG" > /dev/null 2>&1
+	done
+	sync
+
+	# Re-check: if anything is still busy (e.g. held open by a process)
+	# refuse to overwrite it rather than writing over live data.
+	MOUNTED_ON_MEDIA="$(lsblk -nro NAME,MOUNTPOINT "$MEDIA" 2>/dev/null | awk '$2 != "" && $2 != "[SWAP]" {printf "/dev/%s ", $1}')"
+	SWAP_ON_MEDIA="$(lsblk -nro NAME,MOUNTPOINT "$MEDIA" 2>/dev/null | awk '$2 == "[SWAP]" {printf "/dev/%s ", $1}')"
+	ACTIVE_VGS=""
+	for VG in $PVS_ON_MEDIA; do
+		if lvs --noheadings -o lv_attr "$VG" 2>/dev/null | tr -d ' ' | grep -q '^.\{3\}a'; then
+			ACTIVE_VGS="$ACTIVE_VGS $VG"
+		fi
+	done
+	if [ -n "$MOUNTED_ON_MEDIA" ] || [ -n "$SWAP_ON_MEDIA" ] || [ -n "$ACTIVE_VGS" ]; then
+		echo "Error: $MEDIA is still in use, refusing to overwrite it."
+		if [ -n "$MOUNTED_ON_MEDIA" ] || [ -n "$SWAP_ON_MEDIA" ]; then
+			echo "Still mounted/in use: $MOUNTED_ON_MEDIA $SWAP_ON_MEDIA"
+		fi
+		if [ -n "$ACTIVE_VGS" ]; then
+			echo "Still active volume groups: $ACTIVE_VGS"
+		fi
+		exit 1
+	fi
+}
+
+check_media_in_use
+
 # If MEDIA is a regular file, set up a loopback device
 LOOP_DEVICE=""
 if [ -f "$MEDIA" ] && [ ! -b "$MEDIA" ]; then
