@@ -20,6 +20,8 @@ optional
 Example: $(basename ${0}) --target=pinebook-pro-rk3399 --media=/dev/mmcblk0
 
 The devices must have on board SPI flash and support enabled for it.
+The target must ship a SPI u-boot image (e.g. u-boot-rockchip-spi.bin)
+in /usr/share/uboot/$TARGET.
 "
 }
 
@@ -118,6 +120,21 @@ if [[ $KOJI_TAG != '' ]]; then
 		done
 		popd &> /dev/null
 	fi
+fi
+
+# The point of this script is to get a SPI image onto the on-board SPI
+# flash, so refuse targets that have no SPI image to flash.
+if ! ls "${PREFIX}"/usr/share/uboot/${TARGET}/*-spi.* > /dev/null 2>&1; then
+	echo "Error: no SPI u-boot image found for target $TARGET."
+	echo "spi-flashing-disk only works for targets that ship a SPI image"
+	echo "(e.g. /usr/share/uboot/$TARGET/u-boot-rockchip-spi.bin)."
+	exit 1
+fi
+
+# The boards.d snippet is needed to make the media bootable
+if [ ! -f "${BOARDDIR}/${TARGET}" ]; then
+	echo "Error: no boards.d entry for target $TARGET."
+	exit 1
 fi
 
 # Create a VFAT partition, 32Mb offset, 256Mb in size
